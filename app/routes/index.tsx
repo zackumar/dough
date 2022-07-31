@@ -73,18 +73,20 @@ export default function Index() {
   const [storedLinkToken, setStoredLinkToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedLinkToken = localStorage.getItem("plaid_link_token");
-    if (!storedLinkToken) {
-      fetcher.submit(
-        {
-          intent: "plaidLinkToken",
-        },
-        {
-          method: "post",
-        }
-      );
-    } else {
-      setStoredLinkToken(storedLinkToken);
+    if (user) {
+      const storedLinkToken = localStorage.getItem("plaid_link_token");
+      if (!storedLinkToken) {
+        fetcher.submit(
+          {
+            intent: "plaidLinkToken",
+          },
+          {
+            method: "post",
+          }
+        );
+      } else {
+        setStoredLinkToken(storedLinkToken);
+      }
     }
   }, []);
 
