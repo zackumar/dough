@@ -1,4 +1,4 @@
-app = "dough-ffc5"
+app = "dough"
 kill_signal = "SIGINT"
 kill_timeout = 5
 processes = [ ]
