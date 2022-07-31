@@ -38,8 +38,7 @@ export const createLinkToken = async (user: User) => {
     client_name: CLIENT_NAME,
     products: [Products.Auth],
     language: "en",
-    webhook: "https://webhook.example.com",
-    redirect_uri: "http://localhost:3000/",
+    redirect_uri: process.env.PLAID_REDIRECT_URI,
     country_codes: [CountryCode.Us],
   };
 

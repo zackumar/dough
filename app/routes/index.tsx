@@ -1,9 +1,10 @@
-import { Link, useFetcher, useLoaderData } from "@remix-run/react";
+import { Link, useFetcher, useLoaderData, useNavigate } from "@remix-run/react";
 import {
   ActionFunction,
   json,
   LinksFunction,
   LoaderFunction,
+  redirect,
 } from "@remix-run/node";
 import { useEffect, useState } from "react";
 import { PlaidLinkOptions, usePlaidLink } from "react-plaid-link";
@@ -71,9 +72,14 @@ export default function Index() {
   const fetcher = useFetcher();
   const { hasAccessToken } = useLoaderData<LoaderData>();
   const [storedLinkToken, setStoredLinkToken] = useState<string | null>(null);
+  const [showLinkError, setShowLinkError] = useState(false);
+
+  const hasOauthStateId =
+    typeof window !== "undefined" &&
+    new URL(window.location.href).searchParams.has("oauth_state_id");
 
   useEffect(() => {
-    if (user) {
+    if (user && !hasAccessToken && fetcher.state === "idle") {
       const storedLinkToken = localStorage.getItem("plaid_link_token");
       if (!storedLinkToken) {
         fetcher.submit(
@@ -88,7 +94,11 @@ export default function Index() {
         setStoredLinkToken(storedLinkToken);
       }
     }
-  }, []);
+
+    if (hasAccessToken) {
+      localStorage.removeItem("plaid_link_token");
+    }
+  }, [user, hasAccessToken, fetcher]);
 
   useEffect(() => {
     if (fetcher.data && fetcher.data["linkToken"]) {
@@ -96,13 +106,13 @@ export default function Index() {
         "plaid_link_token",
         fetcher.data["linkToken"]["link_token"]
       );
+
       setStoredLinkToken(fetcher.data["linkToken"]["link_token"]);
     }
   }, [fetcher.data]);
 
-  const hasOauthStateId =
-    typeof window !== "undefined" &&
-    new URL(window.location.href).searchParams.has("oauth_state_id");
+  const navigate = useNavigate();
+
   const config: PlaidLinkOptions = {
     onSuccess: async (public_token, metadata) => {
       fetcher.submit(
@@ -117,7 +127,12 @@ export default function Index() {
     },
     receivedRedirectUri: hasOauthStateId ? window.location.href : undefined,
     onExit: (err, metadata) => {
-      console.log(err, metadata);
+      console.log("Onexit:", err, metadata);
+      if (err) {
+        console.log("test");
+        setShowLinkError(true);
+        navigate("/");
+      }
     },
     onEvent: (eventName, metadata) => {},
     token: storedLinkToken || storedLinkToken || "",
@@ -125,8 +140,16 @@ export default function Index() {
 
   const { open, exit, ready } = usePlaidLink(config);
 
+  useEffect(() => {
+    if (user && hasOauthStateId && ready && !hasAccessToken) {
+      console.log("open");
+
+      open();
+    }
+  }, [ready, open, user, hasOauthStateId, hasAccessToken]);
+
   return (
-    <main className="relative min-h-screen">
+    <main className="min-h-screen">
       <div className="mx-auto mt-10 p-10 sm:flex sm:max-w-7xl sm:flex-row sm:items-start sm:justify-center">
         <div className="flex flex-col justify-center">
           <h1 className="max-w-md pt-2 text-5xl text-black">
@@ -154,6 +177,11 @@ export default function Index() {
               >
                 Connected to Plaid!
               </button>
+            ) : null}
+            {showLinkError ? (
+              <div className="pt-1 text-red-700">
+                Oops! Something went wrong. Please try again.
+              </div>
             ) : null}
             {!user ? (
               <>
