@@ -1,5 +1,5 @@
 {
-  "name": "dough-ffc5",
+  "name": "dough",
   "private": true,
   "sideEffects": false,
   "scripts": {
@@ -36,8 +36,10 @@
     "@remix-run/server-runtime": "^1.6.7",
     "bcryptjs": "^2.4.3",
     "isbot": "^3.5.0",
+    "plaid": "^10.8.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-plaid-link": "^3.3.2",
     "tiny-invariant": "^1.2.0"
   },
   "devDependencies": {

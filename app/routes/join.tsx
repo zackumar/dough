@@ -17,26 +17,77 @@ export async function loader({ request }: LoaderArgs) {
 export async function action({ request }: ActionArgs) {
   const formData = await request.formData();
   const email = formData.get("email");
+  const firstName = formData.get("firstName");
+  const lastName = formData.get("lastName");
   const password = formData.get("password");
   const redirectTo = safeRedirect(formData.get("redirectTo"), "/");
 
   if (!validateEmail(email)) {
     return json(
-      { errors: { email: "Email is invalid", password: null } },
+      {
+        errors: {
+          email: "Email is invalid",
+          password: null,
+          firstName: null,
+          lastName: null,
+        },
+      },
+      { status: 400 }
+    );
+  }
+
+  if (typeof firstName !== "string" || firstName.length === 0) {
+    return json(
+      {
+        errors: {
+          email: null,
+          password: null,
+          firstName: "First name is required",
+          lastName: null,
+        },
+      },
+      { status: 400 }
+    );
+  }
+
+  if (typeof lastName !== "string" || lastName.length === 0) {
+    return json(
+      {
+        errors: {
+          email: null,
+          password: null,
+          firstName: null,
+          lastName: "Last name is required",
+        },
+      },
       { status: 400 }
     );
   }
 
   if (typeof password !== "string" || password.length === 0) {
     return json(
-      { errors: { email: null, password: "Password is required" } },
+      {
+        errors: {
+          email: null,
+          password: "Password is required",
+          firstName: null,
+          lastName: null,
+        },
+      },
       { status: 400 }
     );
   }
 
   if (password.length < 8) {
     return json(
-      { errors: { email: null, password: "Password is too short" } },
+      {
+        errors: {
+          email: null,
+          password: "Password is too short",
+          firstName: null,
+          lastName: null,
+        },
+      },
       { status: 400 }
     );
   }
@@ -48,13 +99,15 @@ export async function action({ request }: ActionArgs) {
         errors: {
           email: "A user already exists with this email",
           password: null,
+          firstName: null,
+          lastName: null,
         },
       },
       { status: 400 }
     );
   }
 
-  const user = await createUser(email, password);
+  const user = await createUser(email, firstName, lastName, password);
 
   return createUserSession({
     request,
@@ -89,6 +142,48 @@ export default function Join() {
     <div className="flex min-h-full flex-col justify-center">
       <div className="mx-auto w-full max-w-md px-8">
         <Form method="post" className="space-y-6">
+          <div className="flex space-x-2">
+            <div>
+              {" "}
+              <label
+                htmlFor="firstName"
+                className="block text-sm font-medium text-gray-700"
+              >
+                First Name
+              </label>
+              <div className="mt-1">
+                <input
+                  id="firstName"
+                  required
+                  autoFocus={true}
+                  name="firstName"
+                  type="text"
+                  autoComplete="given-name"
+                  className="w-full rounded border border-gray-500 px-2 py-1 text-lg"
+                />
+              </div>
+            </div>
+            <div>
+              <label
+                htmlFor="lastName"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Last Name
+              </label>
+              <div className="mt-1">
+                <input
+                  id="lastName"
+                  required
+                  autoFocus={true}
+                  name="lastName"
+                  type="text"
+                  autoComplete="family-name"
+                  className="w-full rounded border border-gray-500 px-2 py-1 text-lg"
+                />
+              </div>
+            </div>
+          </div>
+
           <div>
             <label
               htmlFor="email"
@@ -146,7 +241,7 @@ export default function Join() {
           <input type="hidden" name="redirectTo" value={redirectTo} />
           <button
             type="submit"
-            className="w-full rounded bg-blue-500  py-2 px-4 text-white hover:bg-blue-600 focus:bg-blue-400"
+            className="w-full rounded bg-black py-2 px-4 text-white hover:bg-gray-600 focus:bg-gray-400"
           >
             Create Account
           </button>

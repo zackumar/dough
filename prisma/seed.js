@@ -4,39 +4,27 @@ const bcrypt = require("bcryptjs");
 const prisma = new PrismaClient();
 
 async function seed() {
-  const email = "rachel@remix.run";
+  const email = "test@test.com";
 
   // cleanup the existing database
   await prisma.user.delete({ where: { email } }).catch(() => {
     // no worries if it doesn't exist yet
   });
 
+  const firstName = "Tester";
+  const lastName = "McTesterson";
   const hashedPassword = await bcrypt.hash("racheliscool", 10);
 
   const user = await prisma.user.create({
     data: {
       email,
+      firstName,
+      lastName,
       password: {
         create: {
           hash: hashedPassword,
         },
       },
-    },
-  });
-
-  await prisma.note.create({
-    data: {
-      title: "My first note",
-      body: "Hello, world!",
-      userId: user.id,
-    },
-  });
-
-  await prisma.note.create({
-    data: {
-      title: "My second note",
-      body: "Hello, world!",
-      userId: user.id,
     },
   });
 

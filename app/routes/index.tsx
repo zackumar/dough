@@ -1,135 +1,208 @@
-import { Link } from "@remix-run/react";
+import {
+  Form,
+  Link,
+  useFetcher,
+  useLoaderData,
+  useLocation,
+} from "@remix-run/react";
+import {
+  ActionFunction,
+  json,
+  LinksFunction,
+  LoaderFunction,
+} from "@remix-run/server-runtime";
+import { useEffect, useState } from "react";
+import { PlaidLinkOptions, usePlaidLink } from "react-plaid-link";
+import invariant from "tiny-invariant";
+import { getPlaidAccessToken } from "~/models/plaidaccesstoken.server";
+import { createLinkToken, exchangePublicToken } from "~/plaid.server";
+import { getUser } from "~/session.server";
 
 import { useOptionalUser } from "~/utils";
 
+export const links: LinksFunction = () => {
+  return [
+    {
+      rel: "preload",
+      href: "/assets/svgs/apartment.svg",
+      as: "image/svg+xml",
+    },
+  ];
+};
+
+export const action: ActionFunction = async ({ request }) => {
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+
+  if (intent === "plaidExchange") {
+    const user = await getUser(request);
+    invariant(user, "User is not logged in");
+    return json({
+      token: await exchangePublicToken(
+        user,
+        formData.get("public_token") as string
+      ),
+    });
+  }
+
+  if (intent === "plaidLinkToken") {
+    const user = await getUser(request);
+    invariant(user, "User is not logged in");
+
+    return json({
+      linkToken: await createLinkToken(user),
+    });
+  }
+
+  return json({});
+};
+
+interface LoaderData {
+  hasAccessToken?: boolean;
+}
+
+export const loader: LoaderFunction = async ({ request }) => {
+  const user = await getUser(request);
+  if (!user) return json({});
+
+  const accessToken = await getPlaidAccessToken(user.id);
+
+  return json<LoaderData>({
+    hasAccessToken: !!accessToken,
+  });
+};
+
 export default function Index() {
   const user = useOptionalUser();
+  const fetcher = useFetcher();
+  const { hasAccessToken } = useLoaderData<LoaderData>();
+  const [storedLinkToken, setStoredLinkToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const storedLinkToken = localStorage.getItem("plaid_link_token");
+    if (!storedLinkToken) {
+      fetcher.submit(
+        {
+          intent: "plaidLinkToken",
+        },
+        {
+          method: "post",
+        }
+      );
+    } else {
+      setStoredLinkToken(storedLinkToken);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (fetcher.data && fetcher.data["linkToken"]) {
+      localStorage.setItem(
+        "plaid_link_token",
+        fetcher.data["linkToken"]["link_token"]
+      );
+      setStoredLinkToken(fetcher.data["linkToken"]["link_token"]);
+    }
+  }, [fetcher.data]);
+
+  const hasOauthStateId =
+    typeof window !== "undefined" &&
+    new URL(window.location.href).searchParams.has("oauth_state_id");
+  const config: PlaidLinkOptions = {
+    onSuccess: async (public_token, metadata) => {
+      fetcher.submit(
+        {
+          intent: "plaidExchange",
+          public_token: public_token,
+        },
+        {
+          method: "post",
+        }
+      );
+    },
+    receivedRedirectUri: hasOauthStateId ? window.location.href : undefined,
+    onExit: (err, metadata) => {
+      console.log(err, metadata);
+    },
+    onEvent: (eventName, metadata) => {},
+    token: storedLinkToken || storedLinkToken || "",
+  };
+
+  const { open, exit, ready } = usePlaidLink(config);
+
   return (
-    <main className="relative min-h-screen bg-white sm:flex sm:items-center sm:justify-center">
-      <div className="relative sm:pb-16 sm:pt-8">
-        <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
-          <div className="relative shadow-xl sm:overflow-hidden sm:rounded-2xl">
-            <div className="absolute inset-0">
-              <img
-                className="h-full w-full object-cover"
-                src="https://user-images.githubusercontent.com/1500684/157774694-99820c51-8165-4908-a031-34fc371ac0d6.jpg"
-                alt="Sonic Youth On Stage"
-              />
-              <div className="absolute inset-0 bg-[color:rgba(254,204,27,0.5)] mix-blend-multiply" />
-            </div>
-            <div className="relative px-4 pt-16 pb-8 sm:px-6 sm:pt-24 sm:pb-14 lg:px-8 lg:pb-20 lg:pt-32">
-              <h1 className="text-center text-6xl font-extrabold tracking-tight sm:text-8xl lg:text-9xl">
-                <span className="block uppercase text-yellow-500 drop-shadow-md">
-                  Indie Stack
-                </span>
-              </h1>
-              <p className="mx-auto mt-6 max-w-lg text-center text-xl text-white sm:max-w-3xl">
-                Check the README.md file for instructions on how to get this
-                project deployed.
-              </p>
-              <div className="mx-auto mt-10 max-w-sm sm:flex sm:max-w-none sm:justify-center">
-                {user ? (
-                  <Link
-                    to="/notes"
-                    className="flex items-center justify-center rounded-md border border-transparent bg-white px-4 py-3 text-base font-medium text-yellow-700 shadow-sm hover:bg-yellow-50 sm:px-8"
-                  >
-                    View Notes for {user.email}
-                  </Link>
-                ) : (
-                  <div className="space-y-4 sm:mx-auto sm:inline-grid sm:grid-cols-2 sm:gap-5 sm:space-y-0">
-                    <Link
-                      to="/join"
-                      className="flex items-center justify-center rounded-md border border-transparent bg-white px-4 py-3 text-base font-medium text-yellow-700 shadow-sm hover:bg-yellow-50 sm:px-8"
-                    >
-                      Sign up
-                    </Link>
-                    <Link
-                      to="/login"
-                      className="flex items-center justify-center rounded-md bg-yellow-500 px-4 py-3 font-medium text-white hover:bg-yellow-600  "
-                    >
-                      Log In
-                    </Link>
-                  </div>
-                )}
-              </div>
-              <a href="https://remix.run">
-                <img
-                  src="https://user-images.githubusercontent.com/1500684/158298926-e45dafff-3544-4b69-96d6-d3bcc33fc76a.svg"
-                  alt="Remix"
-                  className="mx-auto mt-16 w-full max-w-[12rem] md:max-w-[16rem]"
-                />
-              </a>
-            </div>
+    <main className="relative min-h-screen">
+      <div className="mx-auto mt-10 p-10 sm:flex sm:max-w-7xl sm:flex-row sm:items-start sm:justify-center">
+        <div className="flex flex-col justify-center">
+          <h1 className="max-w-md pt-2 text-5xl text-black">
+            Rent-splitting made easy.
+          </h1>
+
+          <div className="pt-10">
+            {user && storedLinkToken && !hasAccessToken ? (
+              <button
+                onClick={() => {
+                  open();
+                }}
+                className="inline-flex items-center justify-center rounded border border-transparent bg-black px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-gray-700 hover:text-white"
+              >
+                {!hasOauthStateId
+                  ? "Connect to Plaid"
+                  : "Finish connecting to Plaid"}
+              </button>
+            ) : null}
+            {user && hasAccessToken ? (
+              <button
+                type="button"
+                disabled
+                className="inline-flex items-center justify-center rounded border border-green-500 px-4 py-2 text-base font-medium text-green-500 shadow-sm"
+              >
+                Connected to Plaid!
+              </button>
+            ) : null}
+            {!user ? (
+              <>
+                <Link
+                  to="/login"
+                  className="inline-flex items-center justify-center rounded border border-black px-4 py-2 text-base font-medium text-black shadow-sm hover:border-gray-700 hover:text-black"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  to="/join"
+                  className="ml-2 inline-flex items-center justify-center rounded border border-transparent bg-black px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-gray-700 hover:text-white"
+                >
+                  Sign Up
+                </Link>
+              </>
+            ) : null}
           </div>
         </div>
 
-        <div className="mx-auto max-w-7xl py-2 px-4 sm:px-6 lg:px-8">
-          <div className="mt-6 flex flex-wrap justify-center gap-8">
-            {[
-              {
-                src: "https://user-images.githubusercontent.com/1500684/157764397-ccd8ea10-b8aa-4772-a99b-35de937319e1.svg",
-                alt: "Fly.io",
-                href: "https://fly.io",
-              },
-              {
-                src: "https://user-images.githubusercontent.com/1500684/157764395-137ec949-382c-43bd-a3c0-0cb8cb22e22d.svg",
-                alt: "SQLite",
-                href: "https://sqlite.org",
-              },
-              {
-                src: "https://user-images.githubusercontent.com/1500684/157764484-ad64a21a-d7fb-47e3-8669-ec046da20c1f.svg",
-                alt: "Prisma",
-                href: "https://prisma.io",
-              },
-              {
-                src: "https://user-images.githubusercontent.com/1500684/157764276-a516a239-e377-4a20-b44a-0ac7b65c8c14.svg",
-                alt: "Tailwind",
-                href: "https://tailwindcss.com",
-              },
-              {
-                src: "https://user-images.githubusercontent.com/1500684/157764454-48ac8c71-a2a9-4b5e-b19c-edef8b8953d6.svg",
-                alt: "Cypress",
-                href: "https://www.cypress.io",
-              },
-              {
-                src: "https://user-images.githubusercontent.com/1500684/157772386-75444196-0604-4340-af28-53b236faa182.svg",
-                alt: "MSW",
-                href: "https://mswjs.io",
-              },
-              {
-                src: "https://user-images.githubusercontent.com/1500684/157772447-00fccdce-9d12-46a3-8bb4-fac612cdc949.svg",
-                alt: "Vitest",
-                href: "https://vitest.dev",
-              },
-              {
-                src: "https://user-images.githubusercontent.com/1500684/157772662-92b0dd3a-453f-4d18-b8be-9fa6efde52cf.png",
-                alt: "Testing Library",
-                href: "https://testing-library.com",
-              },
-              {
-                src: "https://user-images.githubusercontent.com/1500684/157772934-ce0a943d-e9d0-40f8-97f3-f464c0811643.svg",
-                alt: "Prettier",
-                href: "https://prettier.io",
-              },
-              {
-                src: "https://user-images.githubusercontent.com/1500684/157772990-3968ff7c-b551-4c55-a25c-046a32709a8e.svg",
-                alt: "ESLint",
-                href: "https://eslint.org",
-              },
-              {
-                src: "https://user-images.githubusercontent.com/1500684/157773063-20a0ed64-b9f8-4e0b-9d1e-0b65a3d4a6db.svg",
-                alt: "TypeScript",
-                href: "https://typescriptlang.org",
-              },
-            ].map((img) => (
-              <a
-                key={img.href}
-                href={img.href}
-                className="flex h-16 w-32 justify-center p-1 grayscale transition hover:grayscale-0 focus:grayscale-0"
-              >
-                <img alt={img.alt} src={img.src} />
-              </a>
-            ))}
+        <img
+          src="/assets/svgs/apartment.svg"
+          className="hidden w-80 md:flex"
+        ></img>
+      </div>
+
+      <div className="bg-slate-50">
+        <div className="mx-auto mt-5 flex max-w-7xl flex-col items-center justify-between space-x-4 p-5 sm:flex-row">
+          <img
+            src="/assets/svgs/coffee_with_friends.svg"
+            className="jutify-center flex w-80 flex-grow flex-col items-center py-5"
+          ></img>
+          <div className="flex flex-grow flex-col">
+            <h1 className="text-2xl font-semibold">
+              Lorem ipsum dolor sit amet.
+            </h1>
+            <p>
+              Lorem ipsum dolor sit amet, consectetur adipisicing elit.
+              Reiciendis dignissimos consequatur necessitatibus quod aperiam ex
+              minima ab veritatis laborum est obcaecati tenetur temporibus,
+              corrupti quo sapiente ipsam libero facere. Nam, sunt quod
+              assumenda nobis magnam facilis tempora numquam libero vitae
+              reiciendis repellat! Rerum doloribus unde laudantium? Ad nostrum
+              rerum facere.
+            </p>
           </div>
         </div>
       </div>
